@@ -1,3 +1,8 @@
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <fcntl.h>
 #include "systemcalls.h"
 
 /**
@@ -17,8 +22,13 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
-}
+    int ret = system(cmd);
+    
+    if (ret == -1) {
+        return false;
+    }
+    
+    return true;}
 
 /**
 * @param count -The numbers of variables passed to the function. The variables are command to execute.
@@ -58,10 +68,35 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    /*
+     * Implementation of execv() with fork and wait
+     */
+    fflush(stdout); // Prevent duplicate logs
+    pid_t pid = fork();
 
-    va_end(args);
+    if (pid == -1) {
+        // Fork failed
+        return false;
+    }
+    else if (pid == 0) {
+        // --- CHILD PROCESS ---
+        execv(command[0], command);
+        
+        // If execv returns, it means it failed (path wrong, etc.)
+        exit(EXIT_FAILURE);
+    }
+    else {
+        // --- PARENT PROCESS ---
+        int status;
+        waitpid(pid, &status, 0); // Wait for child to finish
+        
+        // Check if child exited normally and with success (exit code 0)
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            return true;
+        }
+        return false;
+    }
 
-    return true;
 }
 
 /**
@@ -93,7 +128,62 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
-    va_end(args);
+    /*
+     * Implementation of execv() with output redirection
+     */
+    int kidpid;
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    
+    if (fd < 0) {
+        perror("open"); 
+        return false; 
+    }
 
-    return true;
+    fflush(stdout);
+    kidpid = fork();
+    
+    if (kidpid == -1) {
+        // Fork failed
+        close(fd);
+        return false;
+    }
+    else if (kidpid == 0) {
+        // --- CHILD PROCESS ---
+        
+        // Redirect standard output (screen) to the file we opened
+        if (dup2(fd, STDOUT_FILENO) < 0) {
+            perror("dup2"); 
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+        
+        close(fd); // Close the original file descriptor, we don't need it now
+        
+        execv(command[0], command);
+        
+        // If code reaches here, execv failed
+        perror("execv");
+        exit(EXIT_FAILURE);
+    }
+    else {
+        // --- PARENT PROCESS ---
+        close(fd); // Parent doesn't need the file open
+        int status;
+        waitpid(kidpid, &status, 0);
+        
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            return true;
+        }
+        return false;
+    }
+
+
+
+
+
+
+
+
+
+
 }
