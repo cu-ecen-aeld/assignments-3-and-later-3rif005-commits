@@ -8,6 +8,7 @@ set -u
 # Use the first argument as OUTDIR, or default to /tmp/aeld if not specified.
 # The :- syntax prevents a crash from "set -u" when no argument is provided.
 OUTDIR=${1:-/tmp/aeld}
+FINDER_APP_DIR=$(realpath $(dirname $0))
 
 echo "Using directory ${OUTDIR} for output"
 
@@ -90,7 +91,6 @@ sudo mknod -m 600 "${OUTDIR}/rootfs/dev/console" c 5 1
 
 # Clean and build the writer utility
 # (Assumes script is in finder-app/ and writer code is in same folder)
-FINDER_APP_DIR=$(realpath $(dirname $0))
 cd "${FINDER_APP_DIR}"
 make clean
 make CROSS_COMPILE=${CROSS_COMPILE}
