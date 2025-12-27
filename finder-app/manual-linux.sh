@@ -112,6 +112,12 @@ cp ${FINDER_APP_DIR}/autorun-qemu.sh ${OUTDIR}/rootfs/home/
 sed -i 's|\.\./conf/assignment.txt|conf/assignment.txt|g' ${OUTDIR}/rootfs/home/finder-test.sh
 sed -i 's|\./writer.sh|./writer|g' ${OUTDIR}/rootfs/home/finder-test.sh
 
+# Ensure scripts are executable
+chmod +x ${OUTDIR}/rootfs/home/finder.sh
+chmod +x ${OUTDIR}/rootfs/home/finder-test.sh
+chmod +x ${OUTDIR}/rootfs/home/autorun-qemu.sh
+chmod +x ${OUTDIR}/rootfs/home/writer
+
 # TODO: Chown the root directory
 cd "${OUTDIR}/rootfs"
 sudo chown -R root:root *
