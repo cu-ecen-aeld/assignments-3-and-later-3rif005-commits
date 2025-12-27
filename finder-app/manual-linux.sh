@@ -34,7 +34,14 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     echo "Checking out version ${KERNEL_VERSION}"
     git checkout ${KERNEL_VERSION}
 
-    # TODO: Add your kernel build steps here
+    # Deep clean the kernel source
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
+    # Set default configuration for our virtual ARM board
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
+    # Build the kernel image (vmlinux)
+    make -j$(nproc) ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
+    # Build the hardware description files (Device Tree)
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs
 fi
 
 echo "Adding the Image in outdir"
@@ -55,7 +62,10 @@ then
 git clone git://busybox.net/busybox.git
     cd busybox
     git checkout ${BUSYBOX_VERSION}
-    # TODO:  Configure busybox
+    make distclean
+    make defconfig
+    # Install BusyBox into our staging folder
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install CONFIG_PREFIX=${OUTDIR}/rootfs
 else
     cd busybox
 fi
@@ -67,14 +77,41 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
+SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
 
+    # Copy the Dynamic Linker/Loader
+    cp -L ${SYSROOT}/lib/ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib/
+    
+    # Copy Shared Libraries from lib64
+    cp -L ${SYSROOT}/lib64/libm.so.6 ${OUTDIR}/rootfs/lib64/
+    cp -L ${SYSROOT}/lib64/libresolv.so.2 ${OUTDIR}/rootfs/lib64/
+    cp -L ${SYSROOT}/lib64/libc.so.6 ${OUTDIR}/rootfs/lib64/
 # TODO: Make device nodes
 
 # TODO: Clean and build the writer utility
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
+# Cross-compile your writer app
+    cd ${FINDER_APP_DIR}
+    make clean
+    make CROSS_COMPILE=${CROSS_COMPILE}
 
+    # Copy everything to the rootfs /home directory
+    cp writer ${OUTDIR}/rootfs/home/
+    cp finder.sh ${OUTDIR}/rootfs/home/
+    cp finder-test.sh ${OUTDIR}/rootfs/home/
+    cp autorun-qemu.sh ${OUTDIR}/rootfs/home/
+    
+    # Copy the configuration folder
+    mkdir -p ${OUTDIR}/rootfs/home/conf
+    cp conf/username.txt ${OUTDIR}/rootfs/home/conf/
+    cp conf/assignment.txt ${OUTDIR}/rootfs/home/conf/
 # TODO: Chown the root directory
 
 # TODO: Create initramfs.cpio.gz
+cd ${OUTDIR}/rootfs
+    # Find all files, bundle them, and change ownership to root
+    find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
+    cd ${OUTDIR}
+    gzip -f initramfs.cpio
